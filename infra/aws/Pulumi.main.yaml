@@ -1,0 +1,21 @@
+config:
+  aws:region: us-east-1
+  aws:profile:
+    secure: v1:8G4kfT294FxlOo4u:FTuOwnmnN21NkTbJYHOjxr5rO1Q=
+  aws:accessKey:
+    secure: v1:p+tWQMMvaBFljIjo:OxoApTBZ3pmEHuTM36/txDRhGH2GGIs0UOhKcX6RKYTo6Nyo
+  aws:secretKey:
+    secure: v1:wbO7rTMDiSg5jwlH:CnmGoOnFzgyIXGbsyRjF4X4osDPHqHzoThkWWxcbBXmJxCd4VqJ77/IrpxjgbyKoH0S41s3G0wg=
+  discord-letterboxd-hook:letterboxdUsername:
+    secure: v1:1V4mZ8YP7jZaFCDW:DqLWVvMXfma9fxcIAh//0Ymj8M98jVHGFXW34g==
+  discord-letterboxd-hook:parameterName: "/letterboxd/lastSeenId"
+  discord-letterboxd-hook:memorySize: "128"
+  discord-letterboxd-hook:timeoutSeconds: "10"
+  discord-letterboxd-hook:scheduleExpression: "rate(30 minutes)"
+  discord-letterboxd-hook:scheduleName: "letterboxd-every-30m"
+  discord-letterboxd-hook:discordWebhookUrl:
+    secure: v1:6W3fV+QcKSYEsDhp:sEcqAVqV8hzxCosIqxWJUldF71NtOmUiziLLeSM57T+waMgtVGGs2520/NYiVmNmbubA6RKLnO1NgparcIIix1ohys09KzAp1EFW/5nYPQ4Fwt8n3yP0/sfdTFgwgUgCcuumRm/nsmDI9R585iYceMjc8o2GC2eDcHw4u+VXChOfeQZCeSU14oM=
+  discord-letterboxd-hook:logLevel: "info"
+  discord-letterboxd-hook:enableSchedule: "true"
+  discord-letterboxd-hook:scheduleForceMostRecent: "false"
+encryptionsalt: v1:idfmFUm4WR8=:v1:d23QgKqbe5PAfbFW:VEaG/uZvozuo/rvyTrBfGpoYw3xg6A==

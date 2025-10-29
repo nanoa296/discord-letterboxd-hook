@@ -1,0 +1,9 @@
+config:
+  azure-native:location: eastus
+  discord-letterboxd-hook-azure:letterboxdUsername: YOUR_USERNAME_HERE
+  discord-letterboxd-hook-azure:discordWebhookUrl: https://discord.com/api/webhooks/...
+  discord-letterboxd-hook-azure:scheduleExpression: "0 */30 * * * *"
+  discord-letterboxd-hook-azure:logLevel: info
+  discord-letterboxd-hook-azure:persistForcedState: "true"
+  discord-letterboxd-hook-azure:stateContainer: letterboxd-state
+  discord-letterboxd-hook-azure:codeContainer: function-code

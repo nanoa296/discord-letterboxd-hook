@@ -1,0 +1,19 @@
+{
+  "name": "discord-letterboxd-hook",
+  "version": "1.0.0",
+  "description": "",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.19.0",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.916.0",
+    "@azure/storage-blob": "^12.17.0",
+    "@google-cloud/storage": "^7.11.0",
+    "rss-parser": "^3.13.0"
+  }
+}

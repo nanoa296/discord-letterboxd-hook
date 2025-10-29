@@ -1,0 +1,3 @@
+name: discord-letterboxd-hook-gcp
+runtime: nodejs
+main: pulumi-gcp.ts

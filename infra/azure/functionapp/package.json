@@ -1,0 +1,7 @@
+{
+  "name": "discord-letterboxd-azure",
+  "version": "0.1.0",
+  "private": true,
+  "main": "TimerTrigger/index.js",
+  "dependencies": {}
+}

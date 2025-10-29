@@ -1,0 +1,7 @@
+name: discord-letterboxd-hook
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Infrastructure for the Discord Letterboxd webhook Lambda.
+main: aws-stack.ts

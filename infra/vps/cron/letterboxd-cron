@@ -1,0 +1,2 @@
+# Run the webhook sync every 5 minutes
+*/5 * * * * /usr/bin/env bash /path/to/repo/infra/vps/scripts/run-letterboxd.sh >> /var/log/letterboxd.log 2>&1
