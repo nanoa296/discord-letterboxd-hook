@@ -11,10 +11,9 @@ let GcpStorage;
 const parser = new Parser({ timeout: 15000 });
 const ssm = new SSMClient();
 
-const FEED_USER = process.env.LETTERBOXD_USERNAME;
+const userEnvInput = process.env.LETTERBOXD_USERNAME || process.env.LETTERBOXD_USERNAMES || "";
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 const PARAM_NAME = process.env.PARAM_NAME || "/letterboxd/lastSeenId";
-const FEED_URL = `https://letterboxd.com/${FEED_USER}/rss/`;
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info").toLowerCase();
 const SCHEDULE_FORCE_MOST_RECENT = toBool(process.env.SCHEDULE_FORCE_MOST_RECENT);
 const STATE_FILE = process.env.STATE_FILE;
@@ -28,6 +27,43 @@ const useFileState = Boolean(STATE_FILE);
 const DEFAULT_PERSIST_FORCED_STATE = process.env.PERSIST_FORCED_STATE === undefined
   ? true
   : toBool(process.env.PERSIST_FORCED_STATE);
+const FEED_USERS = parseUserList(userEnvInput);
+const MULTI_USER_MODE = FEED_USERS.length > 1;
+
+function parseUserList(rawInput = "") {
+  if (!rawInput) return [];
+  if (/[\r\n]/.test(rawInput)) {
+    throw new Error("LETTERBOXD_USERNAME must be a comma-separated list (no newlines)");
+  }
+  const parts = rawInput
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const list = [];
+  for (const part of parts) {
+    const withoutAt = part.replace(/^@+/, "");
+    if (!withoutAt) continue;
+    const canonical = withoutAt.toLowerCase();
+    if (seen.has(canonical)) continue;
+    seen.add(canonical);
+    list.push({
+      username: withoutAt,
+      canonical,
+      stateKey: buildStateKey(withoutAt),
+    });
+  }
+  return list;
+}
+
+function buildStateKey(username) {
+  const normalized = username
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9._-]/g, "-");
+  return normalized || "default";
+}
 
 function toBool(value) {
   if (typeof value === "boolean") return value;
@@ -57,12 +93,12 @@ async function ssmPut(name, value) {
 
 const stateBackend = resolveStateBackend();
 
-async function readState() {
-  return stateBackend.read();
+async function readState(user) {
+  return stateBackend.read(user);
 }
 
-async function writeState(value) {
-  await stateBackend.write(value);
+async function writeState(user, value) {
+  await stateBackend.write(user, value);
 }
 
 function resolveStateBackend() {
@@ -90,33 +126,81 @@ function resolveStateBackend() {
 }
 
 function createFileBackend() {
+  async function readRaw() {
+    if (!STATE_FILE) return null;
+    try {
+      const data = await fs.readFile(STATE_FILE, "utf8");
+      return data;
+    } catch (err) {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    }
+  }
+
+  function shouldNamespace(user) {
+    return MULTI_USER_MODE && !!user;
+  }
+
   return {
-    async read() {
-      if (!STATE_FILE) return null;
+    async read(user) {
+      const data = await readRaw();
+      if (!data) return null;
+      const trimmed = data.trim();
+      if (!trimmed) return null;
+      if (!shouldNamespace(user)) return trimmed;
       try {
-        const data = await fs.readFile(STATE_FILE, "utf8");
-        return data.trim() || null;
-      } catch (err) {
-        if (err.code === "ENOENT") return null;
-        throw err;
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed[user.stateKey] || null;
+        }
+      } catch {
+        // legacy single-user state stored as plain text
       }
+      return trimmed;
     },
-    async write(value) {
+    async write(user, value) {
       if (!value || !STATE_FILE) return;
       await fs.mkdir(path.dirname(STATE_FILE), { recursive: true });
-      await fs.writeFile(STATE_FILE, value, "utf8");
+      if (!shouldNamespace(user)) {
+        await fs.writeFile(STATE_FILE, value, "utf8");
+        return;
+      }
+      let map = {};
+      const data = await readRaw();
+      if (data) {
+        try {
+          const parsed = JSON.parse(data.trim());
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            map = parsed;
+          }
+        } catch {
+          map = {};
+        }
+      }
+      map[user.stateKey] = value;
+      await fs.writeFile(STATE_FILE, JSON.stringify(map), "utf8");
     },
   };
 }
 
 function createSsmBackend() {
   return {
-    read: () => ssmGet(PARAM_NAME),
-    write: async (value) => {
+    read: (user) => ssmGet(resolveParamName(user)),
+    write: async (user, value) => {
       if (!value) return;
-      await ssmPut(PARAM_NAME, value);
+      await ssmPut(resolveParamName(user), value);
     },
   };
+}
+
+function resolveParamName(user) {
+  if (!user) return PARAM_NAME;
+  if (PARAM_NAME.includes("{user}")) {
+    return PARAM_NAME.replace(/\{user\}/g, user.username);
+  }
+  if (!MULTI_USER_MODE) return PARAM_NAME;
+  const suffix = PARAM_NAME.endsWith("/") ? "" : "/";
+  return `${PARAM_NAME}${suffix}${user.stateKey}`;
 }
 
 function ensureAzureClient() {
@@ -135,10 +219,10 @@ function ensureAzureClient() {
 function createAzureBlobBackend() {
   const client = () => ensureAzureClient();
   return {
-    async read() {
+    async read(user) {
       const service = client();
       const container = service.getContainerClient(AZURE_CONTAINER);
-      const blob = container.getBlobClient(AZURE_BLOB);
+      const blob = container.getBlobClient(resolveAzureBlobName(user));
       try {
         const exists = await blob.exists();
         if (!exists) return null;
@@ -150,17 +234,26 @@ function createAzureBlobBackend() {
         throw err;
       }
     },
-    async write(value) {
+    async write(user, value) {
       if (!value) return;
       const service = client();
       const container = service.getContainerClient(AZURE_CONTAINER);
       await container.createIfNotExists();
-      const blockBlob = container.getBlockBlobClient(AZURE_BLOB);
+      const blockBlob = container.getBlockBlobClient(resolveAzureBlobName(user));
       await blockBlob.upload(value, Buffer.byteLength(value), {
         blobHTTPHeaders: { blobContentType: "text/plain" },
       });
     },
   };
+}
+
+function resolveAzureBlobName(user) {
+  if (!user) return AZURE_BLOB;
+  if (AZURE_BLOB.includes("{user}")) {
+    return AZURE_BLOB.replace(/\{user\}/g, user.username);
+  }
+  if (!MULTI_USER_MODE) return AZURE_BLOB;
+  return `${AZURE_BLOB}-${user.stateKey}`;
 }
 
 function ensureGcpClient() {
@@ -179,10 +272,10 @@ function ensureGcpClient() {
 function createGcpStorageBackend() {
   const storage = () => ensureGcpClient();
   return {
-    async read() {
+    async read(user) {
       const client = storage();
       const bucket = client.bucket(GCP_BUCKET);
-      const file = bucket.file(GCP_OBJECT);
+      const file = bucket.file(resolveGcpObjectName(user));
       try {
         const [exists] = await file.exists();
         if (!exists) return null;
@@ -194,14 +287,23 @@ function createGcpStorageBackend() {
         throw err;
       }
     },
-    async write(value) {
+    async write(user, value) {
       if (!value) return;
       const client = storage();
       const bucket = client.bucket(GCP_BUCKET);
-      const file = bucket.file(GCP_OBJECT);
+      const file = bucket.file(resolveGcpObjectName(user));
       await file.save(value, { contentType: "text/plain" });
     },
   };
+}
+
+function resolveGcpObjectName(user) {
+  if (!user) return GCP_OBJECT;
+  if (GCP_OBJECT.includes("{user}")) {
+    return GCP_OBJECT.replace(/\{user\}/g, user.username);
+  }
+  if (!MULTI_USER_MODE) return GCP_OBJECT;
+  return `${GCP_OBJECT}-${user.stateKey}`;
 }
 
 function postToDiscord(payload) {
@@ -287,7 +389,7 @@ function flushLogs() {
   console.log("[letterboxd]", "log summary", logStream.length, "entries");
 }
 
-function toDiscordPayload(entry) {
+function toDiscordPayload(entry, user) {
   const title = (entry.title || "").replace(/\s+-\s+★.*$/, "").trim() || "New diary entry";
   const url = entry.link;
   const watchedLine = extractWatchedOn(entry.content || entry.contentSnippet || "") ||
@@ -296,6 +398,8 @@ function toDiscordPayload(entry) {
   const poster = extractPosterFromContent(entry.content || "");
   let description = watchedLine;
   if (rating) description += `\nRating: ${"★".repeat(Math.floor(rating))}${rating % 1 ? "½" : ""}`;
+  const profileName = user?.username || user?.canonical || "letterboxd";
+  const profileSlug = user?.canonical || profileName.toLowerCase();
 
   const embed = {
     title,
@@ -303,11 +407,11 @@ function toDiscordPayload(entry) {
     description,
     timestamp: entry.isoDate || new Date().toISOString(),
     author: {
-      name: FEED_USER,
-      url: `https://letterboxd.com/${FEED_USER}/`,
+      name: profileName,
+      url: `https://letterboxd.com/${profileSlug}/`,
     },
     footer: {
-      text: `${FEED_USER} | letterboxd.com`,
+      text: `${profileName} | letterboxd.com`,
     },
   };
 
@@ -335,10 +439,10 @@ function orderFeedItems(feedItems = []) {
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 exports.handler = async (event = {}) => {
-  if (!WEBHOOK || !FEED_USER)
+  if (!WEBHOOK || !FEED_USERS.length)
     throw new Error("Missing DISCORD_WEBHOOK_URL or LETTERBOXD_USERNAME");
 
-  const options = {
+  const baseOptions = {
     dryRun: toBool(event.dryRun ?? process.env.DRY_RUN),
     forceMostRecent: toBool(event.forceMostRecent ?? process.env.FORCE_MOST_RECENT ?? (event.source === "aws.scheduler" && SCHEDULE_FORCE_MOST_RECENT)),
     maxPosts: Number(event.maxPosts ?? process.env.MAX_POSTS) || undefined,
@@ -346,21 +450,37 @@ exports.handler = async (event = {}) => {
     persistForcedState: toBool(event.persistForcedState ?? DEFAULT_PERSIST_FORCED_STATE),
   };
 
-  const feed = await parser.parseURL(FEED_URL);
+  const perUser = [];
+  for (const user of FEED_USERS) {
+    const result = await processFeedForUser(user, baseOptions);
+    perUser.push({ user, result });
+  }
+
+  const summary = perUser.length === 1
+    ? perUser[0].result
+    : perUser.map(({ user, result }) => `${user.username}:${result}`).join(", ");
+  flushLogs();
+  return summary;
+};
+
+async function processFeedForUser(user, baseOptions) {
+  const options = { ...baseOptions };
+  const feedUrl = `https://letterboxd.com/${user.canonical}/rss/`;
+  const feed = await parser.parseURL(feedUrl);
   if (!feed?.items?.length) return "no items";
 
   const ordered = orderFeedItems(feed.items);
   if (!ordered.length) return "no items";
 
-  const storedLastIdRaw = await readState();
+  const storedLastIdRaw = await readState(user);
   const storedLastId = storedLastIdRaw && storedLastIdRaw.trim() ? storedLastIdRaw.trim() : null;
   const normalizedStoredId = storedLastId ? storedLastId.toLowerCase() : null;
   let logicalLastId = options.overrideLastSeen || normalizedStoredId || null;
-  log("info", "storedLastId", storedLastId, "override", options.overrideLastSeen);
+  log("info", `[${user.username}] storedLastId`, storedLastId, "override", options.overrideLastSeen);
 
   if (!storedLastId && !options.overrideLastSeen) {
     const newest = ordered[ordered.length - 1];
-    if (newest) await writeState(newest.id);
+    if (newest) await writeState(user, newest.id);
     if (!options.forceMostRecent) return "initialized";
     logicalLastId = newest?.id || null;
   }
@@ -372,7 +492,7 @@ exports.handler = async (event = {}) => {
   for (const entry of normalizedDescending) {
     if (logicalLastId && entry.id === logicalLastId) break;
     const diaryish = isDiaryish(entry.it);
-    log("debug", "descending consider", entry.id, { diaryish });
+    log("debug", `[${user.username}] descending consider`, entry.id, { diaryish });
     if (diaryish) candidates.push(entry);
   }
   let encounteredLast = normalizedDescending.some((entry) => logicalLastId && entry.id === logicalLastId);
@@ -380,10 +500,10 @@ exports.handler = async (event = {}) => {
   if (missingCheckpoint && storedLastId && !options.overrideLastSeen) {
     checkpointReset = true;
     options.forceMostRecent = true;
-    log("warn", "stored lastSeen not found in feed; will reset using newest entry", storedLastId);
+    log("warn", `[${user.username}] stored lastSeen not found in feed; will reset using newest entry`, storedLastId);
   }
 
-  log("info", "candidateCount", candidates.length, "reset", checkpointReset, "stored", storedLastId, "encountered", encounteredLast);
+  log("info", `[${user.username}] candidateCount`, candidates.length, "reset", checkpointReset, "stored", storedLastId, "encountered", encounteredLast);
 
   if ((options.forceMostRecent || checkpointReset) && !candidates.length) {
     const fallbackDiary = normalizedDescending.find((x) => isDiaryish(x.it));
@@ -392,7 +512,7 @@ exports.handler = async (event = {}) => {
       const reason = checkpointReset ? "reset" : fallbackDiary ? "diary" : "any";
       candidates = [{ ...fallbackAny, forced: true, reason }];
     }
-    log("info", "forceMostRecent triggered", candidates[0]?.reason);
+    log("info", `[${user.username}] forceMostRecent triggered`, candidates[0]?.reason);
   }
 
   if (options.maxPosts && candidates.length > options.maxPosts) {
@@ -405,8 +525,8 @@ exports.handler = async (event = {}) => {
   const forcedFlag = candidates.some((c) => c.forced);
 
   for (const candidate of candidates) {
-    const payload = toDiscordPayload(candidate.it);
-    log("info", `posting ${candidate.id}`, { forced: !!candidate.forced, diary: isDiaryish(candidate.it) });
+    const payload = toDiscordPayload(candidate.it, user);
+    log("info", `[${user.username}] posting ${candidate.id}`, { forced: !!candidate.forced, diary: isDiaryish(candidate.it) });
     if (options.dryRun) {
       console.log(`[dryRun] Would post ${candidate.id}: ${payload.content}`);
     } else {
@@ -414,7 +534,7 @@ exports.handler = async (event = {}) => {
       const forcedShouldPersist = candidate.reason === "reset" || options.persistForcedState;
       const shouldPersist = persistState && (!candidate.forced || forcedShouldPersist);
       if (shouldPersist) {
-        await writeState(candidate.id);
+        await writeState(user, candidate.id);
       }
       await delay(800);
     }
@@ -422,13 +542,11 @@ exports.handler = async (event = {}) => {
   }
 
   if (!processed) {
-    log("warn", "no candidates posted", { forceMostRecent: options.forceMostRecent || checkpointReset });
+    log("warn", `[${user.username}] no candidates posted`, { forceMostRecent: options.forceMostRecent || checkpointReset });
     return (options.forceMostRecent || checkpointReset) ? "forced 0" : "posted 0";
   }
 
   const prefix = options.dryRun ? "dryRun" : "posted";
   const forcedDetails = forcedFlag && candidates[0]?.reason === "any" ? " (forced any)" : forcedFlag ? " (forced)" : "";
-  const result = `${prefix} ${processed}${forcedDetails}`;
-  flushLogs();
-  return result;
-};
+  return `${prefix} ${processed}${forcedDetails}`;
+}

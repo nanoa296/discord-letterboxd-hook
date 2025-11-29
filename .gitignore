@@ -17,6 +17,7 @@ logs/
 infra/vps/.env
 infra/vps/.env.local
 app/.lastSeen
+app/*test*
 
 # Build artifacts
 *.zip

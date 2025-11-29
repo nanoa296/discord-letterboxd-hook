@@ -8,6 +8,7 @@ Poll a Letterboxd diary feed and mirror new entries into a Discord channel. The 
 - Treats RSS entries that link to `letterboxd.com/film/...`, show a star rating, or contain “Watched on …” as diary items.
 - Posts new entries oldest → newest with posters, watched date, and star rating in a Discord embed.
 - Persists the last seen entry in the configured state backend (SSM, file, Azure Blob, or GCS) and auto-resyncs if the checkpoint disappears.
+- Accepts multiple Letterboxd usernames in one comma-separated environment variable and iterates through each feed during a scheduled run.
 
 ## Requirements
 - Node.js 20+ (development + local tests)
@@ -35,13 +36,15 @@ The handler auto-detects where to store the last processed diary entry:
 
 Force a specific backend with `STATE_BACKEND` if you need to override the detection logic.
 
+When you list multiple usernames, the handler maintains a separate checkpoint per account. SSM Parameter names, blob/object names, or the local file automatically gain a sanitized username suffix unless you include `{user}` in `PARAM_NAME`, `AZURE_STATE_BLOB`, or `GCP_STATE_OBJECT` to control the exact naming.
+
 ## Environment Variables
 All deployment targets rely on the same env vars (Pulumi stacks map them to cloud config; the VPS `.env` template sets them locally):
 
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | ✅ | Discord webhook that receives the diary updates. |
-| `LETTERBOXD_USERNAME` | ✅ | Letterboxd username; the handler polls `https://letterboxd.com/<username>/rss/`. |
+| `LETTERBOXD_USERNAME` | ✅ | One or more Letterboxd usernames separated by commas (e.g. `name1,name2`). |
 | `PARAM_NAME` | ➖ | Optional SSM parameter name used to store the last processed entry id. Defaults to `/letterboxd/lastSeenId`. |
 | `DRY_RUN` | ➖ | When set to `true`, logs the would-be Discord payloads without posting. |
 | `FORCE_MOST_RECENT` | ➖ | When set to `true`, posts the newest diary entry even if nothing is newer than the stored checkpoint—useful for manual tests. |
