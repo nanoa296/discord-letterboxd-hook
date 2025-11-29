@@ -114,7 +114,7 @@ const cloudFunction = new gcp.cloudfunctionsv2.Function("letterboxdFunction", {
     name: functionName,
     location,
     buildConfig: {
-        runtime: "nodejs20",
+        runtime: "nodejs24",
         entryPoint: "letterboxd",
         source: {
             storageSource: {

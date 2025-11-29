@@ -87,7 +87,7 @@ if (persistForcedState !== undefined) {
 }
 
 const lambdaFunction = new aws.lambda.Function("letterboxdDiscordHook", {
-  runtime: "nodejs20.x",
+  runtime: "nodejs22.x",
   role: lambdaRole.arn,
   handler: "handler.handler",
   architectures: ["x86_64"],

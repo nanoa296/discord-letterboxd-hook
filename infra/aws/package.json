@@ -8,7 +8,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@pulumi/aws": "^6.46.0",
+    "@pulumi/aws": "^7.12.0",
     "@pulumi/pulumi": "^3.134.0"
   },
   "devDependencies": {

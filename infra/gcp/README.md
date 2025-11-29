@@ -50,7 +50,7 @@ pulumi up
 ```bash
 cd infra/gcp/function
 npm install --package-lock-only   # creates package-lock.json for Cloud Functions build
-gcloud functions deploy letterboxd --region=us-central1 --gen2 --runtime=nodejs20 --entry-point=letterboxd --trigger-http
+gcloud functions deploy letterboxd --region=us-central1 --gen2 --runtime=nodejs24 --entry-point=letterboxd --trigger-http
 ```
 (Replace the deploy command with your own parameters or rely on Pulumi to deploy.)
 

@@ -135,7 +135,7 @@ const functionApp = new azure.web.WebApp("letterboxdFunction", {
     serverFarmId: functionPlan.id,
     siteConfig: {
         appSettings,
-        linuxFxVersion: "NODE|20",
+        linuxFxVersion: "NODE|24",
         http20Enabled: true,
     },
     kind: "functionapp",

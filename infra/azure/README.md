@@ -3,7 +3,7 @@
 Deploy the Discord Letterboxd hook on Azure Functions using Pulumi. This stack provisions:
 - Resource group
 - Storage account + blob container (state persistence)
-- Consumption-tier Function App (Node.js 20)
+- Consumption-tier Function App (Node.js 24, currently in preview)
 - Timer trigger matching the provided cron expression
 
 ## Prerequisites
