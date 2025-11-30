@@ -1,6 +1,6 @@
 {
   "name": "discord-letterboxd-azure-infra",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "pulumi-azure.ts",
   "license": "MIT",

@@ -16,7 +16,7 @@ Pulumi provisions the Lambda function, IAM role, SSM parameter, and EventBridge 
    ```bash
    pulumi config set aws:region us-east-1
    pulumi config set --secret discord-letterboxd-hook:discordWebhookUrl "https://discord.com/api/webhooks/..."
-   pulumi config set discord-letterboxd-hook:letterboxdUsername "YOUR_USERNAME_HERE"
+   pulumi config set discord-letterboxd-hook:username "YOUR_USERNAME_HERE"
    # Optional: turn off the managed EventBridge schedule
    pulumi config set discord-letterboxd-hook:enableSchedule false
    # Optional: disable checkpoint persistence for troubleshooting replays

@@ -1,7 +1,5 @@
 config:
   aws:region: us-east-1
-  discord-letterboxd-hook:letterboxdUsername:
-    secure: v1:1V4mZ8YP7jZaFCDW:DqLWVvMXfma9fxcIAh//0Ymj8M98jVHGFXW34g==
   discord-letterboxd-hook:parameterName: "/letterboxd/lastSeenId"
   discord-letterboxd-hook:memorySize: "128"
   discord-letterboxd-hook:timeoutSeconds: "10"
@@ -16,4 +14,6 @@ config:
     secure: v1:Xabutpgqoqg42aOb:J+xm7bxoG616lvPYFvtT8JOZrJcHZtNF07a1472c3N8/Wshd
   aws:secretKey:
     secure: v1:Zj0C5DAgzsBS7C3T:cavXWefZ2CTmZH6UZqqlel+bcDkjQ+Zt3THInczOPA83O7s9QQ+FwQB3hHb8suv0PR3ZvNhR+dw=
+  discord-letterboxd-hook:username:
+    secure: v1:t8mrJOcUtcc4KqoJ:P1CQmgYI+de+s1b2rOKDl1kgBb3dCDdhmfM0eynnwt6E5f3s2DwDSg==
 encryptionsalt: v1:idfmFUm4WR8=:v1:d23QgKqbe5PAfbFW:VEaG/uZvozuo/rvyTrBfGpoYw3xg6A==

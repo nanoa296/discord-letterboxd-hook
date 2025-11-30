@@ -1,6 +1,6 @@
 {
   "name": "discord-letterboxd-hook-infra",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "aws-stack.ts",
   "license": "MIT",

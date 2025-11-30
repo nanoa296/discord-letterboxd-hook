@@ -8,7 +8,7 @@ const location = config.get("location") ?? "us-central1";
 const region = config.get("region") ?? location;
 const scheduleExpression = config.get("scheduleExpression") ?? "*/30 * * * *";
 const timeZone = config.get("timeZone") ?? "Etc/UTC";
-const letterboxdUsername = config.require("letterboxdUsername");
+const username = requireUsername(config);
 const discordWebhookUrl = config.requireSecret("discordWebhookUrl");
 const stateBucketNameConfig = config.get("stateBucketName");
 const stateObjectName = config.get("stateObject") ?? "lastSeenId";
@@ -95,11 +95,10 @@ new gcp.storage.BucketIAMMember("codeBucketBuildAccess", {
     member: cloudBuildServiceAccountMember,
 });
 
-const serviceEnv = pulumi.all([stateBucket.name, discordWebhookUrl, letterboxdUsername]).apply(([bucket, webhook, username]) => {
+const serviceEnv = pulumi.all([stateBucket.name, discordWebhookUrl, username]).apply(([bucket, webhook, selectedUsername]) => {
     const env: Record<string, string> = {
         DISCORD_WEBHOOK_URL: webhook,
-        USERNAME: username,
-        LETTERBOXD_USERNAME: username,
+        USERNAME: selectedUsername,
         STATE_BACKEND: "gcp-storage",
         GCP_STATE_BUCKET: bucket,
         GCP_STATE_OBJECT: stateObjectName,
@@ -189,4 +188,16 @@ function createFunctionArchive() {
 function randomSuffix(prefix: string) {
     const random = Math.random().toString(36).slice(2, 10);
     return `${prefix}-${random}`.slice(0, 63);
+}
+
+function requireUsername(config: pulumi.Config) {
+    const direct = config.get("username");
+    if (direct && direct.trim()) {
+        return direct.trim();
+    }
+    const legacy = config.get("letterboxdUsername");
+    if (legacy && legacy.trim()) {
+        return legacy.trim();
+    }
+    throw new Error("Set 'discord-letterboxd-hook-gcp:username' (legacy: letterboxdUsername) via Pulumi config.");
 }

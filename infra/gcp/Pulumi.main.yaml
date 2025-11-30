@@ -1,7 +1,7 @@
 config:
   gcp:project: your-gcp-project-id
   discord-letterboxd-hook-gcp:location: us-central1
-  discord-letterboxd-hook-gcp:letterboxdUsername: YOUR_USERNAME_HERE
+  discord-letterboxd-hook-gcp:username: YOUR_USERNAME_HERE
   discord-letterboxd-hook-gcp:discordWebhookUrl: https://discord.com/api/webhooks/...
   discord-letterboxd-hook-gcp:scheduleExpression: "*/30 * * * *"
   discord-letterboxd-hook-gcp:timeZone: Etc/UTC

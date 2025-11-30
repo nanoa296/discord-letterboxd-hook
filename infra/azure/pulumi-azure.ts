@@ -9,7 +9,7 @@ const resourceGroupName = config.get("resourceGroupName") ?? "letterboxd-rg";
 const storageAccountName = config.get("storageAccountName") ?? randomSuffix("letterboxdstorage");
 const functionAppName = config.get("functionAppName") ?? randomSuffix("letterboxd-func");
 const scheduleExpression = config.get("scheduleExpression") ?? "0 */30 * * * *"; // every 30 minutes
-const letterboxdUsername = config.require("letterboxdUsername");
+const username = requireUsername(config);
 const discordWebhookUrl = config.requireSecret("discordWebhookUrl");
 const stateContainerName = config.get("stateContainer") ?? "letterboxd-state";
 const stateBlobName = config.get("stateBlob") ?? "lastSeenId";
@@ -117,8 +117,7 @@ const appSettings = pulumi.all([storageConnectionString, discordWebhookUrl, pack
     { name: "FUNCTIONS_WORKER_RUNTIME", value: "node" },
     { name: "NODE_ENV", value: "production" },
     { name: "DISCORD_WEBHOOK_URL", value: webhook },
-    { name: "USERNAME", value: letterboxdUsername },
-    { name: "LETTERBOXD_USERNAME", value: letterboxdUsername },
+    { name: "USERNAME", value: username },
     { name: "STATE_BACKEND", value: "azure-blob" },
     { name: "AZURE_STORAGE_CONNECTION_STRING", value: connectionString },
     { name: "AZURE_STATE_CONTAINER", value: stateContainerName },
@@ -153,4 +152,16 @@ export const timerSchedule = pulumi.output(scheduleExpression);
 function randomSuffix(prefix: string) {
     const random = Math.random().toString(36).slice(2, 8);
     return `${prefix}-${random}`.slice(0, 24);
+}
+
+function requireUsername(config: pulumi.Config) {
+    const direct = config.get("username");
+    if (direct && direct.trim()) {
+        return direct.trim();
+    }
+    const legacy = config.get("letterboxdUsername");
+    if (legacy && legacy.trim()) {
+        return legacy.trim();
+    }
+    throw new Error("Set 'discord-letterboxd-hook-azure:username' (legacy: letterboxdUsername) via Pulumi config.");
 }

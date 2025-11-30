@@ -21,7 +21,7 @@ pnpm install
 ```bash
 pulumi stack select main || pulumi stack init main
 pulumi config set azure-native:location eastus         # optional region override
-pulumi config set discord-letterboxd-hook-azure:letterboxdUsername YOUR_USERNAME
+pulumi config set discord-letterboxd-hook-azure:username YOUR_USERNAME
 pulumi config set --secret discord-letterboxd-hook-azure:discordWebhookUrl "https://discord.com/api/webhooks/..."
 pulumi config set discord-letterboxd-hook-azure:scheduleExpression "0 */30 * * * *"   # optional
 pulumi config set discord-letterboxd-hook-azure:logLevel info                           # optional

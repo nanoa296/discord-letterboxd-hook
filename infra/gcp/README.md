@@ -24,7 +24,7 @@ pnpm install
 pulumi stack select main || pulumi stack init main
 pulumi config set gcp:project your-gcp-project-id
 pulumi config set discord-letterboxd-hook-gcp:location us-central1           # optional region override
-pulumi config set discord-letterboxd-hook-gcp:letterboxdUsername YOUR_USERNAME
+pulumi config set discord-letterboxd-hook-gcp:username YOUR_USERNAME
 pulumi config set --secret discord-letterboxd-hook-gcp:discordWebhookUrl "https://discord.com/api/webhooks/..."
 pulumi config set discord-letterboxd-hook-gcp:scheduleExpression "*/30 * * * *"   # optional cadence
 pulumi config set discord-letterboxd-hook-gcp:timeZone Etc/UTC                    # optional timezone

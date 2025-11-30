@@ -4,7 +4,7 @@ import * as path from "path";
 
 const config = new pulumi.Config();
 
-const letterboxdUsername = config.require("letterboxdUsername");
+const username = requireUsername(config);
 const discordWebhookUrl = config.requireSecret("discordWebhookUrl");
 const parameterNameInput = config.get("parameterName") ?? "/letterboxd/lastSeenId";
 const scheduleExpression = config.get("scheduleExpression") ?? "rate(30 minutes)";
@@ -76,8 +76,7 @@ new aws.iam.RolePolicy("lambdaParameterAccess", {
 
 const lambdaEnv: Record<string, pulumi.Input<string>> = {
   DISCORD_WEBHOOK_URL: discordWebhookUrl,
-  USERNAME: letterboxdUsername,
-  LETTERBOXD_USERNAME: letterboxdUsername,
+  USERNAME: username,
   PARAM_NAME: normalizedParamName,
   LOG_LEVEL: config.get("logLevel") ?? process.env.LOG_LEVEL ?? "info",
   SCHEDULE_FORCE_MOST_RECENT: (config.get("scheduleForceMostRecent") ?? process.env.SCHEDULE_FORCE_MOST_RECENT ?? "false").toString(),
@@ -147,3 +146,15 @@ export const lambdaName = lambdaFunction.name;
 export const lambdaArn = lambdaFunction.arn;
 export const scheduleArn = scheduleArnOutput ?? pulumi.output<string | undefined>(undefined);
 export const parameterName = ssmParameter?.name ?? pulumi.output<string | undefined>(undefined);
+
+function requireUsername(config: pulumi.Config) {
+  const direct = config.get("username");
+  if (direct && direct.trim()) {
+    return direct.trim();
+  }
+  const legacy = config.get("letterboxdUsername");
+  if (legacy && legacy.trim()) {
+    return legacy.trim();
+  }
+  throw new Error("Set 'discord-letterboxd-hook:username' (legacy: letterboxdUsername) via Pulumi config.");
+}
