@@ -98,6 +98,7 @@ new gcp.storage.BucketIAMMember("codeBucketBuildAccess", {
 const serviceEnv = pulumi.all([stateBucket.name, discordWebhookUrl, letterboxdUsername]).apply(([bucket, webhook, username]) => {
     const env: Record<string, string> = {
         DISCORD_WEBHOOK_URL: webhook,
+        USERNAME: username,
         LETTERBOXD_USERNAME: username,
         STATE_BACKEND: "gcp-storage",
         GCP_STATE_BUCKET: bucket,

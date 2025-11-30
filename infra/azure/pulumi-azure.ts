@@ -117,6 +117,7 @@ const appSettings = pulumi.all([storageConnectionString, discordWebhookUrl, pack
     { name: "FUNCTIONS_WORKER_RUNTIME", value: "node" },
     { name: "NODE_ENV", value: "production" },
     { name: "DISCORD_WEBHOOK_URL", value: webhook },
+    { name: "USERNAME", value: letterboxdUsername },
     { name: "LETTERBOXD_USERNAME", value: letterboxdUsername },
     { name: "STATE_BACKEND", value: "azure-blob" },
     { name: "AZURE_STORAGE_CONNECTION_STRING", value: connectionString },

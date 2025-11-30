@@ -1,6 +1,6 @@
 # Discord Letterboxd Hook
 
-![Example Discord embed showing a Letterboxd diary entry mirrored into Discord](discord-letterboxd-post.png)
+<img src="discord-letterboxd-post.png" alt="Example Discord embed showing a Letterboxd diary entry mirrored into Discord" width="420" />
 
 Poll a Letterboxd diary feed and mirror new entries into a Discord channel. The codebase shares one Node.js script (`app/handler.js`) and includes ready-to-deploy stacks for VPS cron jobs/Pulumi programs for AWS Lambda, Azure Functions, and Google Cloud Functions under `infra`. See `CHANGELOG.md` for version history and upgrades.
 
@@ -44,7 +44,7 @@ All deployment targets rely on the same env vars (Pulumi stacks map them to clou
 | Variable | Required | Description |
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | ✅ | Discord webhook that receives the diary updates. |
-| `LETTERBOXD_USERNAME` | ✅ | One or more Letterboxd usernames separated by commas (e.g. `name1,name2`). |
+| `USERNAME` | ✅ | One or more Letterboxd usernames separated by commas (e.g. `name1,name2`). Append `:<text>` after any username to surface a Discord handle or label in the post (e.g. `name1:@FilmFan`). Legacy aliases: `LETTERBOXD_USERNAME`, `LETTERBOXD_USERNAMES`. |
 | `PARAM_NAME` | ➖ | Optional SSM parameter name used to store the last processed entry id. Defaults to `/letterboxd/lastSeenId`. |
 | `DRY_RUN` | ➖ | When set to `true`, logs the would-be Discord payloads without posting. |
 | `FORCE_MOST_RECENT` | ➖ | When set to `true`, posts the newest diary entry even if nothing is newer than the stored checkpoint—useful for manual tests. |
@@ -62,6 +62,9 @@ All deployment targets rely on the same env vars (Pulumi stacks map them to clou
 | `PERSIST_FORCED_STATE` | ➖ | Controls whether forced posts update the stored checkpoint. Defaults to `true`; set to `false` when you intentionally want to replay the most recent entry repeatedly for troubleshooting. |
 
 Enabling `SCHEDULE_FORCE_MOST_RECENT` while `PERSIST_FORCED_STATE` is `false` keeps reposting the same diary entry until new activity shows up, so reserve that combination for short-lived diagnostics.
+
+### Discord Labels
+Include a suffix like `letterboxdUser:DiscordName` in `USERNAME` (or its legacy aliases) to annotate a diary entry with that Discord text. The handler shows it beside the Letterboxd username as `letterboxduser (@DiscordName)` and automatically adds the `@` unless you already included one (or a `<@...>` mention), so you stay in control of whether real mentions fire.
 
 ## Manual Test
 ```bash

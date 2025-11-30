@@ -76,6 +76,7 @@ new aws.iam.RolePolicy("lambdaParameterAccess", {
 
 const lambdaEnv: Record<string, pulumi.Input<string>> = {
   DISCORD_WEBHOOK_URL: discordWebhookUrl,
+  USERNAME: letterboxdUsername,
   LETTERBOXD_USERNAME: letterboxdUsername,
   PARAM_NAME: normalizedParamName,
   LOG_LEVEL: config.get("logLevel") ?? process.env.LOG_LEVEL ?? "info",

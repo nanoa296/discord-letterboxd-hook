@@ -9,9 +9,13 @@ let BlobServiceClient;
 let GcpStorage;
 
 const parser = new Parser({ timeout: 15000 });
-const ssm = new SSMClient();
+let ssm;
 
-const userEnvInput = process.env.LETTERBOXD_USERNAME || process.env.LETTERBOXD_USERNAMES || "";
+const userEnvInput =
+  process.env.USERNAME ||
+  process.env.LETTERBOXD_USERNAME ||
+  process.env.LETTERBOXD_USERNAMES ||
+  "";
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 const PARAM_NAME = process.env.PARAM_NAME || "/letterboxd/lastSeenId";
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info").toLowerCase();
@@ -33,7 +37,7 @@ const MULTI_USER_MODE = FEED_USERS.length > 1;
 function parseUserList(rawInput = "") {
   if (!rawInput) return [];
   if (/[\r\n]/.test(rawInput)) {
-    throw new Error("LETTERBOXD_USERNAME must be a comma-separated list (no newlines)");
+    throw new Error("USERNAME must be a comma-separated list (no newlines)");
   }
   const parts = rawInput
     .split(",")
@@ -42,7 +46,8 @@ function parseUserList(rawInput = "") {
   const seen = new Set();
   const list = [];
   for (const part of parts) {
-    const withoutAt = part.replace(/^@+/, "");
+    const { letterboxd, discordTag } = splitDiscordTag(part);
+    const withoutAt = letterboxd.replace(/^@+/, "");
     if (!withoutAt) continue;
     const canonical = withoutAt.toLowerCase();
     if (seen.has(canonical)) continue;
@@ -51,9 +56,29 @@ function parseUserList(rawInput = "") {
       username: withoutAt,
       canonical,
       stateKey: buildStateKey(withoutAt),
+      discordTag,
     });
   }
   return list;
+}
+
+function splitDiscordTag(part = "") {
+  const colonIndex = part.indexOf(":");
+  if (colonIndex === -1) {
+    return { letterboxd: part, discordTag: undefined };
+  }
+  const letterboxd = part.slice(0, colonIndex).trim();
+  const discordRaw = part.slice(colonIndex + 1);
+  const discordTag = discordRaw && discordRaw.trim() ? discordRaw.trim() : undefined;
+  return { letterboxd, discordTag };
+}
+
+function formatDiscordMention(tag) {
+  if (!tag) return "";
+  const trimmed = tag.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("<@") || trimmed.startsWith("@")) return trimmed;
+  return `@${trimmed}`;
 }
 
 function buildStateKey(username) {
@@ -74,8 +99,9 @@ function toBool(value) {
 }
 
 async function ssmGet(name) {
+  const client = ensureSsm();
   try {
-    const r = await ssm.send(new GetParameterCommand({ Name: name }));
+    const r = await client.send(new GetParameterCommand({ Name: name }));
     return r?.Parameter?.Value || null;
   } catch {
     return null;
@@ -83,7 +109,8 @@ async function ssmGet(name) {
 }
 
 async function ssmPut(name, value) {
-  await ssm.send(new PutParameterCommand({
+  const client = ensureSsm();
+  await client.send(new PutParameterCommand({
     Name: name,
     Value: value,
     Overwrite: true,
@@ -91,6 +118,12 @@ async function ssmPut(name, value) {
   }));
 }
 
+function ensureSsm() {
+  if (!ssm) {
+    ssm = new SSMClient();
+  }
+  return ssm;
+}
 const stateBackend = resolveStateBackend();
 
 async function readState(user) {
@@ -318,12 +351,15 @@ function postToDiscord(payload) {
     };
     const req = https.request(opts, (res) => {
       if (res.statusCode === 429) {
+        res.resume();
         const retryAfter = Number(res.headers["retry-after"] || 2);
         setTimeout(() => postToDiscord(payload).then(resolve).catch(reject), retryAfter * 1000);
         return;
       }
-      if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-      else {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        res.resume();
+        resolve();
+      } else {
         let body = "";
         res.on("data", (chunk) => (body += chunk));
         res.on("end", () => reject(new Error(`Discord ${res.statusCode}: ${body}`)));
@@ -396,10 +432,13 @@ function toDiscordPayload(entry, user) {
     `Watched on ${formatWatchedDate(entry.isoDate)}.`;
   const rating = extractRating(entry.content || entry.contentSnippet || "");
   const poster = extractPosterFromContent(entry.content || "");
-  let description = watchedLine;
-  if (rating) description += `\nRating: ${"★".repeat(Math.floor(rating))}${rating % 1 ? "½" : ""}`;
+  const descriptionParts = [watchedLine];
+  if (rating) descriptionParts.push(`Rating: ${"★".repeat(Math.floor(rating))}${rating % 1 ? "½" : ""}`);
+  const description = descriptionParts.join("\n");
   const profileName = user?.username || user?.canonical || "letterboxd";
   const profileSlug = user?.canonical || profileName.toLowerCase();
+  const discordLabel = formatDiscordMention(user?.discordTag);
+  const authorLabel = discordLabel ? `${profileName} (${discordLabel})` : profileName;
 
   const embed = {
     title,
@@ -407,7 +446,7 @@ function toDiscordPayload(entry, user) {
     description,
     timestamp: entry.isoDate || new Date().toISOString(),
     author: {
-      name: profileName,
+      name: authorLabel,
       url: `https://letterboxd.com/${profileSlug}/`,
     },
     footer: {
@@ -440,7 +479,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 exports.handler = async (event = {}) => {
   if (!WEBHOOK || !FEED_USERS.length)
-    throw new Error("Missing DISCORD_WEBHOOK_URL or LETTERBOXD_USERNAME");
+    throw new Error("Missing DISCORD_WEBHOOK_URL or USERNAME/LETTERBOXD_USERNAME");
 
   const baseOptions = {
     dryRun: toBool(event.dryRun ?? process.env.DRY_RUN),
