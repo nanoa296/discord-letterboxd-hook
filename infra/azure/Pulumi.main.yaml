@@ -1,6 +1,10 @@
 config:
   azure-native:location: eastus
-  discord-letterboxd-hook-azure:username: YOUR_USERNAME_HERE
+  azure-native:subscriptionId: YOUR_AZURE_SUBSCRIPTION_ID
+  azure-native:tenantId: YOUR_AZURE_TENANT_ID
+  azure-native:clientId: YOUR_AZURE_APP_ID
+  azure-native:clientSecret: YOUR_AZURE_APP_SECRET
+  discord-letterboxd-hook-azure:username: YOUR_LETTERBOXD_USERNAME
   discord-letterboxd-hook-azure:discordWebhookUrl: https://discord.com/api/webhooks/...
   discord-letterboxd-hook-azure:scheduleExpression: "0 */30 * * * *"
   discord-letterboxd-hook-azure:logLevel: info

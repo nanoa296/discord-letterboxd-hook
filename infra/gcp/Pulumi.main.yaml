@@ -1,5 +1,8 @@
 config:
   gcp:project: your-gcp-project-id
+  gcp:region: us-central1
+  gcp:zone: us-central1-a
+  gcp:credentials: YOUR_GCP_SERVICE_ACCOUNT_JSON
   discord-letterboxd-hook-gcp:location: us-central1
   discord-letterboxd-hook-gcp:username: YOUR_USERNAME_HERE
   discord-letterboxd-hook-gcp:discordWebhookUrl: https://discord.com/api/webhooks/...

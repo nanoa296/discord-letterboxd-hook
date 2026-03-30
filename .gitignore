@@ -16,6 +16,8 @@ logs/
 !*.env.example
 infra/vps/.env
 infra/vps/.env.local
+infra/private/
+infra/nanoa296/
 app/.lastSeen
 app/*test*
 
