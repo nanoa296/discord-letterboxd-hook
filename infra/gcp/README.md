@@ -34,7 +34,7 @@ pulumi config set --secret discord-letterboxd-hook-gcp:discordWebhookUrl "https:
 ```bash
 pulumi up
 ```
-Pulumi zips `../../app`, uploads it to the code bucket, deploys a Cloud Functions v2 service (Node.js 22 runtime), grants access to the state bucket, and creates a Cloud Scheduler job that hits the HTTPS endpoint with OIDC credentials.
+Pulumi zips `../../app`, uploads it to the code bucket, deploys a Cloud Functions v2 service (Node.js 24 runtime), grants access to the state bucket, and creates a Cloud Scheduler job that hits the HTTPS endpoint with OIDC credentials.
 
 ## Operate and Troubleshoot
 - State forces `STATE_BACKEND=gcp-storage`; checkpoints live in the managed bucket.

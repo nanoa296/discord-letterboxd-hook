@@ -2,6 +2,8 @@
 
 Ship the shared Letterboxd handler as an Azure Functions timer app with Blob Storage state. Everything in this folder assumes the code lives in `../../app`.
 
+> Status note (June 5, 2026): this folder has not been refreshed for Azure's latest Linux Consumption guidance. The Pulumi code currently targets `NODE|24`, while Azure Functions currently documents Node.js 22 as the last supported Node version for Linux Consumption apps. Treat this deployment path as needing validation before reuse.
+
 ## Requirements
 - [Pulumi CLI](https://www.pulumi.com/docs/get-started/install/) installed.
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) logged in (`az login`) with rights to create resource groups, storage, and Functions.
@@ -31,7 +33,7 @@ pulumi config set --secret discord-letterboxd-hook-azure:discordWebhookUrl "http
 ```bash
 pulumi up
 ```
-Pulumi zips `../../app`, uploads it to the storage account, and deploys a consumption-tier Function App (Node.js 24 runtime) with a managed identity and timer trigger (unless you override the schedule).
+Pulumi zips `../../app`, uploads it to the storage account, and deploys a consumption-tier Function App with a managed identity and timer trigger (unless you override the schedule).
 
 ## Operate and Troubleshoot
 - State forces `STATE_BACKEND=azure-blob`; checkpoints live in the provisioned storage account.
@@ -39,6 +41,7 @@ Pulumi zips `../../app`, uploads it to the storage account, and deploys a consum
 - Default timer runs every 30 minutes. Adjust `scheduleExpression` for faster/slower runs.
 - Run `pnpm install --prod` inside `app/` before deploying so the package contains current dependencies.
 - Local dry-run: duplicate `local.settings.json.example` -> `local.settings.json` under `infra/azure/functionapp`, run `pnpm install`, then `func start`.
+- Before redeploying this target, verify the current supported `linuxFxVersion` and hosting plan guidance in Azure Functions docs.
 
 ## Outputs
 - `functionAppNameOutput`: Function App name for quick portal access.

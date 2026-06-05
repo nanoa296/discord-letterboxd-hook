@@ -40,7 +40,7 @@ The handler auto-detects where to save the “last seen diary entry” marker:
 - AWS: Lambda defaults to **AWS SSM Parameter Store**.
 - VPS: Set `STATE_FILE` (used by the VPS helper) to keep the marker on disk.
 - Azure: Add `AZURE_STORAGE_CONNECTION_STRING` to use **Azure Blob Storage**.
-- GGP: Provide `GCP_STATE_BUCKET` (or `STATE_BACKEND=gcp-storage`) to keep state in **Google Cloud Storage**.
+- GCP: Provide `GCP_STATE_BUCKET` (or `STATE_BACKEND=gcp-storage`) to keep state in **Google Cloud Storage**.
 
 If you wish to override the auto-detection, set `STATE_BACKEND` to `aws-ssm`, `file`, `azure-blob`, or `gcp-storage`.
 
