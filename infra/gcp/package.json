@@ -8,11 +8,16 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@pulumi/gcp": "^8.23.0",
-    "@pulumi/pulumi": "^3.204.0"
+    "@pulumi/gcp": "^8.41.1",
+    "@pulumi/pulumi": "^3.271.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.23",
+    "@types/node": "^20.19.43",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@opentelemetry/api": "1.9.0"
+    }
   }
 }

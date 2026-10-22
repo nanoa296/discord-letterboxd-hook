@@ -1,13 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as azure from "@pulumi/azure-native";
 import * as path from "path";
+import { createHash } from "crypto";
 
 const config = new pulumi.Config();
 
 const location = config.get("location") ?? "eastus";
 const resourceGroupName = config.get("resourceGroupName") ?? "letterboxd-rg";
-const storageAccountName = config.get("storageAccountName") ?? randomSuffix("letterboxdstorage");
-const functionAppName = config.get("functionAppName") ?? randomSuffix("letterboxd-func");
+const nameSuffix = createHash("sha256").update(`${azure.config.subscriptionId}:${pulumi.getProject()}:${pulumi.getStack()}`).digest("hex").slice(0, 10);
+const storageAccountName = config.get("storageAccountName") ?? `letterboxd${nameSuffix}`;
+const functionAppName = config.get("functionAppName") ?? `letterboxd-func-${nameSuffix}`;
 const scheduleExpression = config.get("scheduleExpression") ?? "0 */30 * * * *"; // every 30 minutes
 const username = requireUsername(config);
 const discordWebhookUrl = config.requireSecret("discordWebhookUrl");
@@ -59,7 +61,9 @@ const storageConnectionString = storageAccountKeys.keys.apply((keys) =>
 const functionPlan = new azure.web.AppServicePlan("letterboxdPlan", {
     resourceGroupName: resourceGroup.name,
     location: resourceGroup.location,
-    name: randomSuffix("letterboxd-plan"),
+    name: `letterboxd-plan-${nameSuffix}`,
+    kind: "linux",
+    reserved: true,
     sku: {
         capacity: 1,
         tier: "Dynamic",
@@ -98,23 +102,25 @@ const codeBlob = new azure.storage.Blob("letterboxdFunctionCode", {
     source: functionArchive,
 });
 
-const codeBlobSas = azure.storage.listStorageAccountServiceSASOutput({
-    accountName: storageAccount.name,
+// Grant package access before creating the app so its first startup can fetch code.
+const packageIdentity = new azure.managedidentity.UserAssignedIdentity("letterboxdPackageIdentity", {
     resourceGroupName: resourceGroup.name,
-    protocols: azure.storage.HttpProtocol.Https,
-    sharedAccessStartTime: pulumi.output(new Date()).apply((d) => d.toISOString()),
-    sharedAccessExpiryTime: pulumi.output(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)).apply((d) => d.toISOString()),
-    resource: azure.storage.SignedResource.C,
-    permissions: azure.storage.Permissions.R,
-    canonicalizedResource: pulumi.interpolate`/blob/${storageAccount.name}/${codeContainer.name}`,
-    contentType: "application/zip",
+    location: resourceGroup.location,
+    resourceName: `letterboxd-package-${nameSuffix}`,
 });
+const clientConfig = azure.authorization.getClientConfigOutput({});
+const packageReader = new azure.authorization.RoleAssignment("letterboxdPackageReader", {
+    scope: codeContainer.id,
+    principalId: packageIdentity.principalId,
+    principalType: "ServicePrincipal",
+    roleDefinitionId: pulumi.interpolate`/subscriptions/${clientConfig.subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/2a2b9908-6ea1-4ae2-8e65-a410df84e7d1`,
+});
+const packageUrl = pulumi.interpolate`https://${storageAccount.name}.blob.core.windows.net/${codeContainer.name}/${codeBlob.name}`;
 
-const packageUrl = pulumi.interpolate`https://${storageAccount.name}.blob.core.windows.net/${codeContainer.name}/${codeBlob.name}?${codeBlobSas.serviceSasToken}`;
-
-const appSettings = pulumi.all([storageConnectionString, discordWebhookUrl, packageUrl]).apply(([connectionString, webhook, packageSasUrl]) => ([
+const appSettings = pulumi.all([storageConnectionString, discordWebhookUrl, packageUrl, packageIdentity.id]).apply(([connectionString, webhook, packageBlobUrl, packageIdentityId]) => ([
     { name: "AzureWebJobsStorage", value: connectionString },
     { name: "FUNCTIONS_WORKER_RUNTIME", value: "node" },
+    { name: "FUNCTIONS_EXTENSION_VERSION", value: "~4" },
     { name: "NODE_ENV", value: "production" },
     { name: "DISCORD_WEBHOOK_URL", value: webhook },
     { name: "USERNAME", value: username },
@@ -125,7 +131,8 @@ const appSettings = pulumi.all([storageConnectionString, discordWebhookUrl, pack
     { name: "LOG_LEVEL", value: logLevel },
     { name: "SCHEDULE_FORCE_MOST_RECENT", value: scheduleForceMostRecent },
     { name: "PERSIST_FORCED_STATE", value: persistForcedState },
-    { name: "WEBSITE_RUN_FROM_PACKAGE", value: packageSasUrl },
+    { name: "WEBSITE_RUN_FROM_PACKAGE", value: packageBlobUrl },
+    { name: "WEBSITE_RUN_FROM_PACKAGE_BLOB_MI_RESOURCE_ID", value: packageIdentityId },
 ]));
 
 const functionApp = new azure.web.WebApp("letterboxdFunction", {
@@ -135,24 +142,22 @@ const functionApp = new azure.web.WebApp("letterboxdFunction", {
     serverFarmId: functionPlan.id,
     siteConfig: {
         appSettings,
-        linuxFxVersion: "NODE|24",
+        linuxFxVersion: "NODE|22",
         http20Enabled: true,
     },
-    kind: "functionapp",
+    kind: "functionapp,linux",
+    reserved: true,
     httpsOnly: true,
     identity: {
-        type: "SystemAssigned",
+        type: "SystemAssigned, UserAssigned",
+        userAssignedIdentities: [packageIdentity.id],
     },
-});
+}, { dependsOn: [packageReader] });
 
+export const resourceGroupNameOutput = resourceGroup.name;
 export const functionAppNameOutput = functionApp.name;
 export const functionAppPrincipalId = functionApp.identity.apply((i) => i?.principalId);
 export const timerSchedule = pulumi.output(scheduleExpression);
-
-function randomSuffix(prefix: string) {
-    const random = Math.random().toString(36).slice(2, 8);
-    return `${prefix}-${random}`.slice(0, 24);
-}
 
 function requireUsername(config: pulumi.Config) {
     const direct = config.get("username");

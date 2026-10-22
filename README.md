@@ -30,10 +30,12 @@ Every option lives under `infra/`. The cloud providers each have their own Pulum
 | --- | --- | --- |
 | Linux VPS / cron | Simple `node` run plus a sample cron line for logging. | Local file (`STATE_FILE`). |
 | AWS Lambda (Pulumi) | EventBridge Scheduler triggers the handler with AWS-native auth. | AWS SSM Parameter Store. |
-| Azure Functions (Pulumi) | Timer triggered Function App on the consumption plan. | Azure Blob Storage. |
+| Azure Functions (Pulumi) | Timer triggered Function App on Linux Consumption (retires September 30, 2028). | Azure Blob Storage. |
 | Google Cloud Functions (Pulumi) | Cloud Scheduler → Cloud Functions v2 with OIDC auth. | Google Cloud Storage. |
 
-> Run `pnpm install --prod` inside `app/` before packaging for any cloud target so your archive includes the current dependencies.
+> **Azure lifecycle:** The current deployment uses Linux Consumption, which retires **September 30, 2028**. See the [Azure deployment notes](infra/azure/README.md) for details.
+
+> Run `pnpm install --prod --frozen-lockfile` inside `app/` before packaging for any cloud target so your archive includes the current dependencies.
 
 ## State Storage
 The handler auto-detects where to save the “last seen diary entry” marker:
@@ -81,3 +83,13 @@ cd app
 pnpm install
 node -e 'require("./handler").handler({ forceMostRecent: true, maxPosts: 1 }).then(console.log).catch(console.error)'
 ```
+
+## Dependency maintenance
+
+Use pnpm when installing the shared app dependencies so the lockfile and security overrides are applied. The targeted `gaxios>uuid` and `teeny-request>uuid` overrides select the patched CommonJS-compatible UUID 11 release line used by the Google Storage SDK; remove them once upstream dependencies require a patched version. After changing dependencies, run `pnpm audit --prod` from `app/` and validate each deployment target before redeploying.
+
+To run the local deployment regression checks after installing `app/`, `infra/azure/`, and `infra/gcp/` dependencies:
+```bash
+node --test infra/tests/*.test.cjs infra/azure/tests/deployment.test.cjs infra/gcp/tests/deployment.test.cjs
+```
+These checks use mocks and temporary files; they do not post to Discord or create cloud resources.

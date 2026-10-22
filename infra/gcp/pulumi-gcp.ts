@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as path from "path";
+import { createHash } from "crypto";
 
 const config = new pulumi.Config();
 
@@ -29,9 +30,11 @@ if (!project) {
 const projectInfo = pulumi.output(gcp.organizations.getProject({ projectId: project }));
 const projectNumber = projectInfo.apply((info) => info.number);
 
-const stateBucketName = stateBucketNameConfig ?? randomSuffix("letterboxd-state");
-const codeBucketName = codeBucketNameConfig ?? randomSuffix("letterboxd-code");
-const functionName = functionNameConfig ?? randomSuffix("letterboxd-fn");
+// Stable names avoid replacing resources on every preview or update.
+const nameSuffix = createHash("sha256").update(`${project}:${pulumi.getProject()}:${pulumi.getStack()}`).digest("hex").slice(0, 10);
+const stateBucketName = stateBucketNameConfig ?? `letterboxd-state-${nameSuffix}`;
+const codeBucketName = codeBucketNameConfig ?? `letterboxd-code-${nameSuffix}`;
+const functionName = functionNameConfig ?? `letterboxd-fn-${nameSuffix}`;
 
 const stateBucket = new gcp.storage.Bucket("letterboxdStateBucket", {
     name: stateBucketName,
@@ -51,12 +54,12 @@ const codeBucket = new gcp.storage.Bucket("letterboxdCodeBucket", {
 });
 
 const functionServiceAccount = new gcp.serviceaccount.Account("letterboxdFunctionSa", {
-    accountId: randomSuffix("letterboxdfnsa"),
+    accountId: `letterboxdfnsa-${nameSuffix}`,
     displayName: "Letterboxd Function Service Account",
 });
 
 const schedulerServiceAccount = new gcp.serviceaccount.Account("letterboxdSchedulerSa", {
-    accountId: randomSuffix("letterboxdschedsa"),
+    accountId: `letterboxdschedsa-${nameSuffix}`,
     displayName: "Letterboxd Scheduler Service Account",
 });
 
@@ -120,6 +123,7 @@ const cloudFunction = new gcp.cloudfunctionsv2.Function("letterboxdFunction", {
             storageSource: {
                 bucket: codeBucket.name,
                 object: codeObject.name,
+                generation: codeObject.generation,
             },
         },
     },
@@ -134,11 +138,16 @@ const cloudFunction = new gcp.cloudfunctionsv2.Function("letterboxdFunction", {
     },
 });
 
-const invokerBinding = new gcp.cloudfunctionsv2.FunctionIamMember("schedulerInvoker", {
+const serviceConfig = cloudFunction.serviceConfig.apply((cfg) => {
+    if (!cfg?.service || !cfg.uri) throw new Error("Cloud Function did not return its Cloud Run service and URI");
+    return cfg;
+});
+
+const invokerBinding = new gcp.cloudrun.IamMember("schedulerInvoker", {
     project,
     location,
-    cloudFunction: cloudFunction.name,
-    role: "roles/cloudfunctions.invoker",
+    service: serviceConfig.apply((cfg) => cfg.service.substring(cfg.service.lastIndexOf("/") + 1)),
+    role: "roles/run.invoker",
     member: schedulerServiceAccount.email.apply((email) => `serviceAccount:${email}`),
 });
 
@@ -149,16 +158,17 @@ const schedulerRoleBinding = new gcp.projects.IAMMember("schedulerLogs", {
 });
 
 const schedulerJob = new gcp.cloudscheduler.Job("letterboxdScheduler", {
-    name: randomSuffix("letterboxd-job"),
+    name: `letterboxd-job-${nameSuffix}`,
     region,
     schedule: scheduleExpression,
     timeZone,
     description: "Invoke Letterboxd Discord hook",
     httpTarget: {
         httpMethod: "POST",
-        uri: cloudFunction.serviceConfig.apply((cfg) => cfg?.uri ?? ""),
+        uri: serviceConfig.apply((cfg) => cfg.uri),
         oidcToken: {
             serviceAccountEmail: schedulerServiceAccount.email,
+            audience: serviceConfig.apply((cfg) => cfg.uri),
         },
         headers: {
             "Content-Type": "application/json",
@@ -183,11 +193,6 @@ function createFunctionArchive() {
         "package-lock.json": new pulumi.asset.FileAsset(path.join(functionDir, "package-lock.json")),
         "app": new pulumi.asset.FileArchive(appDir),
     });
-}
-
-function randomSuffix(prefix: string) {
-    const random = Math.random().toString(36).slice(2, 10);
-    return `${prefix}-${random}`.slice(0, 63);
 }
 
 function requireUsername(config: pulumi.Config) {

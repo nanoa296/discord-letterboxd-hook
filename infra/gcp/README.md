@@ -32,14 +32,17 @@ pulumi config set --secret discord-letterboxd-hook-gcp:discordWebhookUrl "https:
 
 ## Deploy
 ```bash
+cd ../../app && pnpm install --prod --frozen-lockfile
+cd ../infra/gcp
+pulumi preview
 pulumi up
 ```
-Pulumi zips `../../app`, uploads it to the code bucket, deploys a Cloud Functions v2 service (Node.js 24 runtime), grants access to the state bucket, and creates a Cloud Scheduler job that hits the HTTPS endpoint with OIDC credentials.
+Pulumi zips `../../app`, uploads it to the code bucket, deploys a Cloud Functions v2 service (Node.js 24 runtime), grants access to the state bucket and Cloud Run invocation permission to the scheduler identity, and creates a Cloud Scheduler job that hits the HTTPS endpoint with OIDC credentials.
 
 ## Operate and Troubleshoot
 - State forces `STATE_BACKEND=gcp-storage`; checkpoints live in the managed bucket.
-- Scheduler retries and failure emails follow the Cloud Scheduler defaults—edit the job if you need custom behavior.
-- Run `pnpm install --prod` inside `app/` before deploying so the archive includes current dependencies.
+- Inspect Scheduler execution status and Cloud Logging for failures. Failure email alerts are not provisioned by this stack; configure Cloud Monitoring alerts if desired.
+- Run `pnpm install --prod --frozen-lockfile` inside `app/` before deploying so the archive includes current dependencies.
 - Logs flow through Cloud Logging; filter by the `functionNameOutput` shown below.
 - Manual dry run: `cd infra/gcp/function`, copy or edit files as needed, run `npm install --package-lock-only`, then `gcloud functions deploy ...` if you want to test outside Pulumi.
 
@@ -48,3 +51,15 @@ Pulumi zips `../../app`, uploads it to the code bucket, deploys a Cloud Function
 - `functionUri`: HTTPS endpoint Cloud Scheduler invokes.
 - `schedulerName`: Cloud Scheduler job ID.
 - `stateBucketNameOutput`: Bucket storing the checkpoint files.
+
+## Updating an existing stack
+
+Resource names now use a stable suffix derived from the GCP project, Pulumi project, and stack. Review `pulumi preview` before applying this to an existing deployment: old random names can cause one-time replacements. Set `stateBucketName`, `codeBucketName`, and `functionName` to existing names to preserve those resources. Service accounts and the Scheduler job can still require replacement. The state bucket has `forceDestroy=false`; preserve its checkpoints and do not remove it to bypass a replacement failure.
+
+The scheduler gets `roles/run.invoker` on the function's underlying Cloud Run service and uses that service's URI as its OIDC audience. The build tracks the uploaded source object's generation so package updates trigger a rebuild.
+
+## Local validation
+
+After installing this stack's dependencies, run `pnpm lint` and `node --test tests/deployment.test.cjs`. This verifies the generated resources using Pulumi mocks without deploying to Google Cloud.
+
+The infrastructure dependency override pins OpenTelemetry API 1.9.0 to satisfy the tracing SDK peer requirements used by Pulumi. Recheck this pin when upgrading Pulumi.

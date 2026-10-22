@@ -8,11 +8,16 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@pulumi/azure-native": "^3.10.2",
-    "@pulumi/pulumi": "^3.204.0"
+    "@pulumi/azure-native": "^3.29.0",
+    "@pulumi/pulumi": "^3.271.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.23",
+    "@types/node": "^20.19.43",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@opentelemetry/api": "1.9.0"
+    }
   }
 }

@@ -16,7 +16,7 @@ cp infra/vps/.env.example infra/vps/.env
 2. Install app dependencies (one time per host):
 ```bash
 cd /path/to/repo/app
-pnpm install --prod
+pnpm install --prod --frozen-lockfile
 ```
 
 3. Make the runner executable:
@@ -37,3 +37,11 @@ The sample cron runs every 30 minutes and pipes stdout/stderr to `/var/log/lette
 - Run the script manually for quick tests: `infra/vps/scripts/run-letterboxd.sh`.
 - Prefer systemd? Point a service/timer at the same script and reuse `infra/vps/.env`.
 - `FORCE_MOST_RECENT=true` plus `PERSIST_FORCED_STATE=false` replays the newest entry on every run—handy for troubleshooting, not for regular use.
+
+## Maintenance and local validation
+
+Keep the host OS and Node.js patched. After updating the repository, refresh dependencies with `pnpm install --prod --frozen-lockfile` inside `app/`.
+
+The runner finds the repository relative to its own location, so cron does not need a particular working directory. Ensure the cron user's `PATH` includes Node.js, and that it can write the state file and chosen log location.
+
+From the repository root, run `bash -n infra/vps/scripts/run-letterboxd.sh` and `node --test infra/tests/wrappers.test.cjs` to check the launcher without contacting Discord.
