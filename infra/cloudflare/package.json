@@ -1,0 +1,27 @@
+{
+  "name": "discord-letterboxd-cloudflare-infra",
+  "version": "1.0.0",
+  "private": true,
+  "main": "pulumi-cloudflare.ts",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "build": "node build.cjs",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "^6.21.0",
+    "@pulumi/pulumi": "^3.271.0",
+    "fast-xml-parser": "^5.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "esbuild": "^0.25.0"
+  },
+  "packageManager": "pnpm@10.19.0",
+  "pnpm": {
+    "overrides": {
+      "@opentelemetry/api": "1.9.0"
+    }
+  }
+}

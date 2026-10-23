@@ -69,3 +69,15 @@ test('GCP HTTP wrapper invokes the shared handler and returns success or failure
   assert.equal(response.body, 'test failure');
   assert.equal(errorLog.mock.calls.length, 1);
 });
+
+test('real Node adapter loads with file state and boolean options', () => {
+  const result = spawnSync(process.execPath, ['-e', `
+    process.env.STATE_BACKEND = "file";
+    process.env.STATE_FILE = "/tmp/unused-letterboxd-checkpoint";
+    process.env.SCHEDULE_FORCE_MOST_RECENT = "true";
+    process.env.PERSIST_FORCED_STATE = "false";
+    const { handler } = require("./app/handler");
+    if (typeof handler !== "function") process.exit(1);
+  `], { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});

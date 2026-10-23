@@ -4,17 +4,17 @@
 
 Share your Letterboxd watchlog with your Discord server friends!
 
- This repo holds one Node.js script (`app/handler.js`) plus Pulumi projects and a cron-friendly helper to deploy to the target platform of your choice.
+ This repo holds shared application logic (`app/core.js`), a Node.js adapter (`app/handler.js`), plus Pulumi projects and a cron-friendly helper to deploy to the target platform of your choice.
 
 ## Requirements
 - Node.js 22+
 - pnpm 10+
-- A target where the script can run on a schedule: VPS/cron, AWS Lambda, Azure Functions, or Google Cloud Functions
+- A target where the script can run on a schedule: VPS/cron, AWS Lambda, Azure Functions, Google Cloud Functions, or Cloudflare Workers
 
 ## How It Works
 - Polls each listed Letterboxd diary RSS feed and treats only real film entries (`letterboxd.com/film/...`, ratings, or “Watched on …”) as diary posts.
 - Sends a Discord embed per entry with poster art, watched date, rating, and optional label like `letterboxduser (@DiscordName)`.
-- Remembers the last diary entry it handled so only new entries are posted. If the checkpoint ever goes missing, the script backfills again.
+- Remembers the last diary entry it handled so only new entries are posted. On first run it initializes the checkpoint without posting old entries. If a stored checkpoint falls out of the feed, it processes the available diary entries again.
 - Accept as many usernames as you want by separating them with commas (`user1,user2`). Add `:text` after any name (`user1:FilmFan`) if you want to share your Discord username alongside your Letterboxd username.
 
 ## Quick Start
@@ -29,16 +29,18 @@ Every option lives under `infra/`. The cloud providers each have their own Pulum
 | Target | Features | State store |
 | --- | --- | --- |
 | Linux VPS / cron | Simple `node` run plus a sample cron line for logging. | Local file (`STATE_FILE`). |
+| [Cloudflare Workers (Pulumi)](infra/cloudflare/README.md) | Cron Trigger invokes a bundled Worker every 30 minutes (UTC). | Workers KV. |
 | AWS Lambda (Pulumi) | EventBridge Scheduler triggers the handler with AWS-native auth. | AWS SSM Parameter Store. |
 | Azure Functions (Pulumi) | Timer triggered Function App on Linux Consumption (retires September 30, 2028). | Azure Blob Storage. |
 | Google Cloud Functions (Pulumi) | Cloud Scheduler → Cloud Functions v2 with OIDC auth. | Google Cloud Storage. |
 
 > **Azure lifecycle:** The current deployment uses Linux Consumption, which retires **September 30, 2028**. See the [Azure deployment notes](infra/azure/README.md) for details.
 
-> Run `pnpm install --prod --frozen-lockfile` inside `app/` before packaging for any cloud target so your archive includes the current dependencies.
+> For Node.js cloud deployments, run `pnpm install --prod --frozen-lockfile` inside `app/` before packaging for any cloud target so your archive includes the current dependencies. Cloudflare bundles its own dependencies from `infra/cloudflare/`.
 
 ## State Storage
 The handler auto-detects where to save the “last seen diary entry” marker:
+- Cloudflare: The Worker uses its bound **Workers KV** namespace; configure it through the [Cloudflare Pulumi project](infra/cloudflare/README.md).
 - AWS: Lambda defaults to **AWS SSM Parameter Store**.
 - VPS: Set `STATE_FILE` (used by the VPS helper) to keep the marker on disk.
 - Azure: Add `AZURE_STORAGE_CONNECTION_STRING` to use **Azure Blob Storage**.
@@ -93,3 +95,12 @@ To run the local deployment regression checks after installing `app/`, `infra/az
 node --test infra/tests/*.test.cjs infra/azure/tests/deployment.test.cjs infra/gcp/tests/deployment.test.cjs
 ```
 These checks use mocks and temporary files; they do not post to Discord or create cloud resources.
+
+Cloudflare checks (after installing `infra/cloudflare/` dependencies):
+
+```bash
+cd infra/cloudflare
+pnpm lint
+pnpm build
+pnpm test
+```
